@@ -184,12 +184,19 @@ else
  && $(MAKE) MAKEFLAGS= rcc_linear_programming \
  && $(MAKE) MAKEFLAGS= rcc_integer_programming \
  && $(MAKE) MAKEFLAGS= rcc_constraint_programming_cp \
+ && $(MAKE) MAKEFLAGS= rcc_constraint_programming_sat \
  && $(MAKE) MAKEFLAGS= rcc_rabbits_pheasants_cp \
+ && $(MAKE) MAKEFLAGS= rcc_rabbits_pheasants_sat \
  && $(MAKE) MAKEFLAGS= rcc_tsp \
  && $(MAKE) MAKEFLAGS= rcc_vrp \
  && $(MAKE) MAKEFLAGS= rcc_knapsack \
  && $(MAKE) MAKEFLAGS= rcc_max_flow \
  && $(MAKE) MAKEFLAGS= rcc_min_cost_flow \
+ && $(MAKE) MAKEFLAGS= rcc_assignment \
+ && $(MAKE) MAKEFLAGS= rcc_nurses_cp \
+ && $(MAKE) MAKEFLAGS= rcc_nurses_sat \
+ && $(MAKE) MAKEFLAGS= rcc_jobshop_cp \
+ && $(MAKE) MAKEFLAGS= rcc_jobshop_sat \
  \
  && $(MAKE) MAKEFLAGS= rjava_LinearProgramming \
  && $(MAKE) MAKEFLAGS= rjava_IntegerProgramming \
