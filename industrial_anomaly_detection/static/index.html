@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工业时序异常检测系统</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .status-dot.connected {
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.running {
+            background: #2196f3;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            font-size: 20px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+
+        .anomaly-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .anomaly-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #fff3cd;
+            border-left: 4px solid #ff9800;
+            border-radius: 5px;
+        }
+
+        .anomaly-item.severe {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+
+        .anomaly-time {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .anomaly-details {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏭 工业时序异常检测系统</h1>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-dot" id="connectionStatus"></span>
+                    <span id="connectionText">未连接</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-dot" id="simulationStatus"></span>
+                    <span id="simulationText">模拟已停止</span>
+                </div>
+                <div class="status-item">
+                    <strong>数据点:</strong> <span id="totalCount">0</span>
+                </div>
+                <div class="status-item">
+                    <strong>异常数:</strong> <span id="anomalyCount">0</span>
+                </div>
+                <div class="status-item">
+                    <strong>异常率:</strong> <span id="anomalyRate">0%</span>
+                </div>
+            </div>
+            <div class="controls">
+                <button class="btn-success" onclick="startSimulation()" id="btnStart">▶ 开始模拟</button>
+                <button class="btn-danger" onclick="stopSimulation()" id="btnStop" disabled>⏸ 停止模拟</button>
+                <button class="btn-secondary" onclick="resetDetector()">🔄 重置</button>
+                <button class="btn-primary" onclick="sendManualData()">📤 发送手动数据</button>
+            </div>
+            <div class="input-group">
+                <input type="number" id="manualValue" placeholder="输入数值进行检测..." value="100">
+                <input type="number" id="simulationInterval" placeholder="模拟间隔(秒)" value="0.5" step="0.1" min="0.1">
+            </div>
+        </header>
+
+        <div class="dashboard">
+            <div class="card full-width">
+                <h2>📈 实时时序图表</h2>
+                <div class="chart-container">
+                    <canvas id="timeSeriesChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📊 统计信息</h2>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-value" id="statTotal">0</div>
+                        <div class="stat-label">总数据点</div>
+                    </div>
+                    <div class="stat-box" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);">
+                        <div class="stat-value" id="statAnomalies">0</div>
+                        <div class="stat-label">检测到的异常</div>
+                    </div>
+                    <div class="stat-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                        <div class="stat-value" id="statRate">0%</div>
+                        <div class="stat-label">异常率</div>
+                    </div>
+                    <div class="stat-box" style="background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%);">
+                        <div class="stat-value" id="statLatest">--</div>
+                        <div class="stat-label">最新值</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>⚠️ 最近异常记录</h2>
+                <div class="anomaly-list" id="anomalyList">
+                    <p style="color: #999; text-align: center; padding: 20px;">暂无异常记录</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket连接
+        const socket = io('http://localhost:5000');
+        
+        // 图表配置
+        const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: '传感器数值',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.4
+                    },
+                    {
+                        label: '异常点',
+                        data: [],
+                        borderColor: '#dc3545',
+                        backgroundColor: '#dc3545',
+                        pointRadius: 6,
+                        pointStyle: 'triangle',
+                        showLine: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '时间'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '数值'
+                        }
+                    }
+                }
+            }
+        });
+
+        const MAX_POINTS = 200;
+        let dataPoints = [];
+        let anomalyPoints = [];
+
+        // WebSocket事件处理
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            document.getElementById('connectionStatus').classList.add('connected');
+            document.getElementById('connectionText').textContent = '已连接';
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            document.getElementById('connectionStatus').classList.remove('connected');
+            document.getElementById('connectionText').textContent = '未连接';
+        });
+
+        socket.on('anomaly_data', (data) => {
+            updateChart(data);
+            updateStats(data);
+            if (data.is_anomaly) {
+                addAnomalyToList(data);
+            }
+        });
+
+        // 更新图表
+        function updateChart(data) {
+            const time = new Date(data.timestamp * 1000).toLocaleTimeString();
+            
+            dataPoints.push({time, value: data.value});
+            if (dataPoints.length > MAX_POINTS) {
+                dataPoints.shift();
+            }
+
+            chart.data.labels = dataPoints.map(p => p.time);
+            chart.data.datasets[0].data = dataPoints.map(p => p.value);
+            
+            // 异常点
+            if (data.is_anomaly) {
+                const anomalyData = Array(dataPoints.length).fill(null);
+                anomalyData[anomalyData.length - 1] = data.value;
+                chart.data.datasets[1].data = anomalyData;
+            }
+            
+            chart.update('none');
+        }
+
+        // 更新统计
+        function updateStats(data) {
+            document.getElementById('totalCount').textContent = data.total_count || dataPoints.length;
+            document.getElementById('anomalyCount').textContent = data.anomaly_count || anomalyPoints.length;
+            
+            const rate = data.anomaly_rate || 0;
+            document.getElementById('anomalyRate').textContent = (rate * 100).toFixed(2) + '%';
+            
+            document.getElementById('statTotal').textContent = data.total_count || dataPoints.length;
+            document.getElementById('statAnomalies').textContent = data.anomaly_count || anomalyPoints.length;
+            document.getElementById('statRate').textContent = (rate * 100).toFixed(2) + '%';
+            document.getElementById('statLatest').textContent = data.value.toFixed(2);
+        }
+
+        // 添加异常到列表
+        function addAnomalyToList(data) {
+            const list = document.getElementById('anomalyList');
+            
+            if (list.querySelector('p')) {
+                list.innerHTML = '';
+            }
+            
+            const item = document.createElement('div');
+            item.className = data.anomaly_score > 5 ? 'anomaly-item severe' : 'anomaly-item';
+            
+            const time = new Date(data.timestamp * 1000).toLocaleString();
+            item.innerHTML = `
+                <div class="anomaly-time">⚠️ ${time}</div>
+                <div class="anomaly-details">
+                    数值: ${data.value.toFixed(2)} | 
+                    异常分数: ${data.anomaly_score.toFixed(4)} | 
+                    置信度: ${(data.confidence * 100).toFixed(1)}%
+                </div>
+            `;
+            
+            list.insertBefore(item, list.firstChild);
+            
+            // 限制显示数量
+            while (list.children.length > 20) {
+                list.removeChild(list.lastChild);
+            }
+            
+            anomalyPoints.push(data);
+        }
+
+        // 开始模拟
+        async function startSimulation() {
+            const interval = parseFloat(document.getElementById('simulationInterval').value) || 0.5;
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/simulation/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({interval})
+                });
+                
+                const result = await response.json();
+                if (result.status === 'started' || result.status === 'already_running') {
+                    document.getElementById('simulationStatus').classList.add('running');
+                    document.getElementById('simulationText').textContent = '模拟运行中';
+                    document.getElementById('btnStart').disabled = true;
+                    document.getElementById('btnStop').disabled = false;
+                }
+            } catch (error) {
+                console.error('Error starting simulation:', error);
+                alert('启动模拟失败: ' + error.message);
+            }
+        }
+
+        // 停止模拟
+        async function stopSimulation() {
+            try {
+                const response = await fetch('http://localhost:5000/api/simulation/stop', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                if (result.status === 'stopped') {
+                    document.getElementById('simulationStatus').classList.remove('running');
+                    document.getElementById('simulationText').textContent = '模拟已停止';
+                    document.getElementById('btnStart').disabled = false;
+                    document.getElementById('btnStop').disabled = true;
+                }
+            } catch (error) {
+                console.error('Error stopping simulation:', error);
+                alert('停止模拟失败: ' + error.message);
+            }
+        }
+
+        // 重置检测器
+        async function resetDetector() {
+            if (!confirm('确定要重置检测器吗？这将清除所有历史数据。')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/reset', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // 清空图表和统计
+                    dataPoints = [];
+                    anomalyPoints = [];
+                    chart.data.labels = [];
+                    chart.data.datasets[0].data = [];
+                    chart.data.datasets[1].data = [];
+                    chart.update();
+                    
+                    document.getElementById('anomalyList').innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暂无异常记录</p>';
+                    
+                    updateStats({total_count: 0, anomaly_count: 0, anomaly_rate: 0, value: 0});
+                    
+                    alert('检测器已重置');
+                }
+            } catch (error) {
+                console.error('Error resetting detector:', error);
+                alert('重置失败: ' + error.message);
+            }
+        }
+
+        // 发送手动数据
+        async function sendManualData() {
+            const value = parseFloat(document.getElementById('manualValue').value);
+            
+            if (isNaN(value)) {
+                alert('请输入有效的数值');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/detect', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        timestamp: Date.now() / 1000,
+                        value: value
+                    })
+                });
+                
+                const result = await response.json();
+                updateChart(result);
+                updateStats(result);
+                
+                if (result.is_anomaly) {
+                    addAnomalyToList(result);
+                }
+            } catch (error) {
+                console.error('Error sending manual data:', error);
+                alert('发送数据失败: ' + error.message);
+            }
+        }
+
+        // 加载历史数据
+        async function loadHistory() {
+            try {
+                const response = await fetch('http://localhost:5000/api/history?limit=100');
+                const result = await response.json();
+                
+                if (result.data && result.data.length > 0) {
+                    result.data.forEach(point => {
+                        updateChart(point);
+                        if (point.is_anomaly) {
+                            addAnomalyToList(point);
+                        }
+                    });
+                    
+                    const lastPoint = result.data[result.data.length - 1];
+                    updateStats(lastPoint);
+                }
+            } catch (error) {
+                console.error('Error loading history:', error);
+            }
+        }
+
+        // 页面加载时获取历史数据
+        window.addEventListener('load', () => {
+            loadHistory();
+        });
+
+        // 回车发送数据
+        document.getElementById('manualValue').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendManualData();
+            }
+        });
+    </script>
+</body>
+</html>
